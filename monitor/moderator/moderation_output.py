@@ -14,6 +14,7 @@ if str(PROJECT_ROOT) not in sys.path:
 from monitor.moderator import ModerationService
 from monitor.prompts import load_prompts
 from monitor.providers.openai_client import OpenAIModerationProvider
+from monitor.storage import DatabaseLogHandler, ModerationRepository
 from schema import ModerationResult
 
 
@@ -25,6 +26,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--dataset-id", type=str, default="allenai/real-toxicity-prompts", help="Dataset identifier to load.")
     parser.add_argument("--split", type=str, default="train", help="Dataset split to load.")
     parser.add_argument("--output", type=Path, default=Path("moderation_results.json"), help="Path to store JSON results.")
+    parser.add_argument(
+        "--database-url",
+        type=str,
+        default=None,
+        help="Optional PostgreSQL database URL for persisting runs (e.g. postgresql+psycopg://user:pass@host/db)",
+    )
     parser.add_argument("--verbose", action="store_true", help="Enable verbose logging.")
     return parser.parse_args()
 
@@ -50,6 +57,16 @@ def save_results(results: List[ModerationResult], output_path: Path) -> None:
     output_path.write_text(json.dumps(payload, indent=2))
 
 
+def _serialize_args(args: argparse.Namespace) -> dict:
+    serialized = {}
+    for key, value in vars(args).items():
+        if isinstance(value, Path):
+            serialized[key] = str(value)
+        else:
+            serialized[key] = value
+    return serialized
+
+
 def main() -> None:
     args = parse_args()
     configure_logging(args.verbose)
@@ -60,11 +77,30 @@ def main() -> None:
     provider = OpenAIModerationProvider(model=args.model)
     service = ModerationService(provider)
 
+    repository: ModerationRepository | None = None
+    run_record = None
+    if args.database_url:
+        repository = ModerationRepository(args.database_url)
+        repository.create_schema()
+        run_record = repository.start_run(
+            dataset_id=args.dataset_id,
+            dataset_split=args.split,
+            model=args.model,
+            prompt_limit=args.limit,
+            output_path=str(args.output),
+            extra_args=_serialize_args(args),
+        )
+        db_handler = DatabaseLogHandler(repository, run_record.id)
+        logging.getLogger().addHandler(db_handler)
+
     logging.info("Starting moderation run.")
     results = service.moderate_prompts(prompts)
     logging.info("Moderation complete. Writing results to %s", args.output)
 
     save_results(results, args.output)
+    if repository and run_record:
+        repository.save_results(run_record.id, results)
+        repository.complete_run(run_record.id)
     preview_results(results, args.preview)
 
 

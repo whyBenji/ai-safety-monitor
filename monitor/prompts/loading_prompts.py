@@ -26,4 +26,5 @@ def load_prompts(
         )
         prompts.append(Prompt(text=prompt_data.get("text", ""), metadata=metadata))
 
+
     return prompts
