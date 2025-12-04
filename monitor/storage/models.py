@@ -39,6 +39,7 @@ class ModerationResultRecord(Base):
     run_id: Mapped[int] = mapped_column(ForeignKey("moderation_runs.id", ondelete="CASCADE"), index=True)
     prompt_text: Mapped[str] = mapped_column(Text)
     prompt_metadata: Mapped[dict] = mapped_column(JSON, default=dict)
+    prompt_payload: Mapped[dict] = mapped_column(JSON, default=dict)
     flagged: Mapped[bool] = mapped_column(Boolean, default=False)
     raw_response: Mapped[dict] = mapped_column(JSON, default=dict)
 

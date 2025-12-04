@@ -20,7 +20,7 @@ from .models import (
 
 logger = logging.getLogger(__name__)
 
-
+database_url: str = "postgresql+psycopg://myuser:mypassword@127.0.0.1:5433/mydb"
 class ModerationRepository:
     """Manages persistence of moderation runs, results, flags, and logs."""
 
@@ -84,6 +84,7 @@ class ModerationRepository:
                     run_id=run_id,
                     prompt_text=result.prompt.text,
                     prompt_metadata=result.prompt.metadata.model_dump(),
+                    prompt_payload=result.prompt.model_dump(),
                     flagged=result.flagged,
                     raw_response=result.raw_response,
                 )
