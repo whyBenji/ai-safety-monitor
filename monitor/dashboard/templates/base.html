@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>AI Safety Monitor</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      :root {
+        color-scheme: light dark;
+        font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+        --accent: #2563eb;
+        --accent-soft: rgba(37, 99, 235, 0.1);
+        --danger: #b91c1c;
+        --success: #15803d;
+      }
+      body {
+        margin: 0;
+        padding: 0;
+        background: #0f172a;
+        color: #f1f5f9;
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+      }
+      header {
+        padding: 1rem 2rem;
+        background: #020617;
+        border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+      a {
+        color: var(--accent);
+        text-decoration: none;
+      }
+      main {
+        flex: 1;
+        padding: 2rem;
+      }
+      footer {
+        padding: 1rem 2rem;
+        border-top: 1px solid rgba(148, 163, 184, 0.2);
+        background: #020617;
+        color: #94a3b8;
+      }
+      .layout {
+        max-width: 1200px;
+        margin: 0 auto;
+      }
+      .metrics {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1rem;
+        margin-bottom: 2rem;
+      }
+      .card {
+        padding: 1.25rem;
+        background: rgba(15, 23, 42, 0.7);
+        border: 1px solid rgba(37, 99, 235, 0.2);
+        border-radius: 0.75rem;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      table th,
+      table td {
+        padding: 0.75rem;
+        text-align: left;
+        border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+      }
+      table tbody tr:hover {
+        background: rgba(51, 65, 85, 0.4);
+      }
+      .status-pill {
+        padding: 0.15rem 0.5rem;
+        border-radius: 999px;
+        font-size: 0.85rem;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: #0f172a;
+        background: #e2e8f0;
+      }
+      .status-running {
+        background: #fbbf24;
+      }
+      .status-completed {
+        background: #4ade80;
+      }
+      .status-error {
+        background: #f87171;
+      }
+      .result-card {
+        background: rgba(15, 23, 42, 0.8);
+        border-radius: 0.75rem;
+        border: 1px solid rgba(148, 163, 184, 0.3);
+        padding: 1.5rem;
+        margin-bottom: 1.25rem;
+      }
+      .prompt-text {
+        font-size: 1rem;
+        line-height: 1.5;
+        margin-bottom: 1rem;
+      }
+      .tag-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        margin-bottom: 1rem;
+      }
+      .tag {
+        padding: 0.15rem 0.45rem;
+        border-radius: 0.5rem;
+        background: rgba(148, 163, 184, 0.2);
+        font-size: 0.85rem;
+      }
+      form.review-form {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.5rem;
+      }
+      form.review-form input[type="text"] {
+        padding: 0.4rem 0.6rem;
+        border-radius: 0.5rem;
+        border: 1px solid rgba(148, 163, 184, 0.4);
+        background: transparent;
+        color: inherit;
+        flex: 1;
+        min-width: 180px;
+      }
+      button {
+        border: none;
+        border-radius: 0.5rem;
+        padding: 0.45rem 0.9rem;
+        cursor: pointer;
+        font-weight: 600;
+        color: #0f172a;
+      }
+      .btn-safe {
+        background: rgba(21, 128, 61, 0.9);
+      }
+      .btn-toxic {
+        background: rgba(185, 28, 28, 0.9);
+      }
+      .btn-ghost {
+        border: 1px solid rgba(148, 163, 184, 0.4);
+        background: transparent;
+        color: inherit;
+      }
+      pre {
+        white-space: pre-wrap;
+        word-break: break-word;
+        background: rgba(2, 6, 23, 0.7);
+        padding: 1rem;
+        border-radius: 0.5rem;
+        font-size: 0.9rem;
+        overflow-x: auto;
+      }
+      @media (max-width: 720px) {
+        header,
+        footer,
+        main {
+          padding: 1rem;
+        }
+        form.review-form {
+          flex-direction: column;
+          align-items: stretch;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div>
+        <strong>AI Safety Monitor</strong>
+      </div>
+      <nav><a href="/">Dashboard</a></nav>
+    </header>
+    <main>
+      <div class="layout">{% block content %}{% endblock %}</div>
+    </main>
+    <footer>
+      Human-in-the-loop monitoring keeps AI systems accountable. Configure the database connection with the
+      <code>AI_SAFETY_MONITOR_DB</code> environment variable.
+    </footer>
+  </body>
+</html>

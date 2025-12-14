@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1>Monitoring Overview</h1>
+<div class="metrics">
+  <div class="card">
+    <h3>Total Runs</h3>
+    <p style="font-size:2rem;margin:0.25rem 0;">{{ metrics.total_runs }}</p>
+    <small>Most recent {{ runs|length }} runs.</small>
+  </div>
+  <div class="card">
+    <h3>Prompts Processed</h3>
+    <p style="font-size:2rem;margin:0.25rem 0;">{{ metrics.prompts_processed }}</p>
+    <small>Across captured runs.</small>
+  </div>
+  <div class="card">
+    <h3>Input Flagged</h3>
+    <p style="font-size:2rem;margin:0.25rem 0;color:var(--danger);">{{ metrics.input_flagged }}</p>
+    <small>Input classification flags.</small>
+  </div>
+  <div class="card">
+    <h3>Output Flagged</h3>
+    <p style="font-size:2rem;margin:0.25rem 0;color:var(--danger);">{{ metrics.output_flagged }}</p>
+    <small>Output classification flags.</small>
+  </div>
+  <div class="card">
+    <h3>Answers Generated</h3>
+    <p style="font-size:2rem;margin:0.25rem 0;">{{ metrics.answers_generated }}</p>
+    <small>Total answers generated.</small>
+  </div>
+  <div class="card">
+    <h3>Reviewed</h3>
+    <p style="font-size:2rem;margin:0.25rem 0;color:var(--success);">{{ metrics.reviewed }}</p>
+    <small>Human decisions captured.</small>
+  </div>
+</div>
+
+<table>
+  <thead>
+    <tr>
+      <th>ID</th>
+      <th>Dataset</th>
+      <th>Model</th>
+      <th>Input Flagged</th>
+      <th>Output Flagged</th>
+      <th>Reviewed</th>
+      <th>Status</th>
+      <th>Started</th>
+      <th>Completed</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for run in runs %}
+    <tr>
+      <td>#{{ run.id }}</td>
+      <td>{{ run.dataset_id }}:{{ run.dataset_split }}</td>
+      <td>{{ run.model }}</td>
+      <td>{{ run.input_flagged_count }}</td>
+      <td>{{ run.output_flagged_count }}</td>
+      <td>{{ run.reviewed_count }}</td>
+      <td>
+        <span class="status-pill {% if run.status == 'completed' %}status-completed{% elif run.status == 'running' %}status-running{% else %}status-error{% endif %}">
+          {{ run.status }}
+        </span>
+      </td>
+      <td>{{ run.created_at or "—" }}</td>
+      <td>{{ run.completed_at or "—" }}</td>
+      <td><a href="/runs/{{ run.id }}">Details →</a></td>
+    </tr>
+    {% else %}
+    <tr>
+      <td colspan="10" style="text-align:center;padding:2rem;color:#94a3b8;">No runs recorded yet.</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

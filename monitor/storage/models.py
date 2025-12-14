@@ -39,8 +39,30 @@ class ModerationResultRecord(Base):
     run_id: Mapped[int] = mapped_column(ForeignKey("moderation_runs.id", ondelete="CASCADE"), index=True)
     prompt_text: Mapped[str] = mapped_column(Text)
     prompt_metadata: Mapped[dict] = mapped_column(JSON, default=dict)
-    flagged: Mapped[bool] = mapped_column(Boolean, default=False)
-    raw_response: Mapped[dict] = mapped_column(JSON, default=dict)
+    prompt_payload: Mapped[dict] = mapped_column(JSON, default=dict)
+    
+    # Input classification
+    input_flagged: Mapped[bool] = mapped_column(Boolean, default=False)
+    input_raw_response: Mapped[dict] = mapped_column(JSON, default=dict)
+    
+    # Answer generation
+    answer_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    answer_model: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    answer_raw_response: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    
+    # Output classification
+    output_flagged: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    output_raw_response: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    
+    # Human review (can review input, output, or both)
+    human_label: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    human_label_type: Mapped[str | None] = mapped_column(String(32), nullable=True)  # 'input', 'output', or 'both'
+    human_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    human_reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    # Legacy fields for backward compatibility (computed properties would be better, but SQLAlchemy needs columns)
+    flagged: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")  # Maps to input_flagged
+    raw_response: Mapped[dict] = mapped_column(JSON, default=dict)  # Maps to input_raw_response
 
     run: Mapped[ModerationRun] = relationship(back_populates="results")
     flags: Mapped[list[ModerationFlagRecord]] = relationship(
@@ -56,6 +78,7 @@ class ModerationFlagRecord(Base):
     category: Mapped[str] = mapped_column(String(255))
     score: Mapped[float] = mapped_column(Float)
     violated: Mapped[bool] = mapped_column(Boolean, default=False)
+    flag_type: Mapped[str] = mapped_column(String(32), default="input")  # 'input' or 'output'
 
     result: Mapped[ModerationResultRecord] = relationship(back_populates="flags")
 
