@@ -1,4 +1,56 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+aiSafetyEnv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Results and outputs
+Results/
+*.json
+!package.json
+pipeline_results.json
+moderation_results.json
+
+# Environment variables
 .env
-Notebooks/*
-docker-compose.yml
-Results/*
+.env.local
+
+# Jupyter Notebooks
+Notebooks/
+*.ipynb_checkpoints
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Alembic
+alembic.ini.bak
+
+# Docker
+docker-compose.override.yml

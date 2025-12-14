@@ -22,21 +22,31 @@ The pipeline ingests prompts (default: [allenai/real-toxicity-prompts](https://h
 
 ---
 
-### Repository layout
+### Repository Layout
 
 ```
 monitor/
-  pipeline/…          # Pipeline orchestrator (input -> answer -> output)
-  moderator/…         # Legacy moderation service (backward compatibility)
-  providers/…         # Pipeline components:
-    - input_classifier.py   # Input classification (Gemma/OpenAI)
-    - answer_generator.py   # Answer generation (OpenAI)
-    - output_classifier.py  # Output classification (Gemma/OpenAI)
-  prompts/…           # Dataset loader (Hugging Face Datasets)
-  storage/…           # SQLAlchemy models & repository utilities
-  dashboard/…         # FastAPI app + templates for HITL review
-toxic_gemma_classifier.py  # Gemma + LoRA classification helper
-requirements.txt           # Runtime dependencies
+  pipeline/              # Pipeline orchestrator
+    - pipeline_cli.py         # Batch processing CLI
+    - interactive_mode.py     # Interactive real-time mode
+    - pipeline_service.py      # Core pipeline logic
+  providers/             # Classification and generation providers
+    - input_classifier.py      # Input classification (Gemma/OpenAI)
+    - answer_generator.py      # Answer generation (OpenAI)
+    - output_classifier.py     # Output classification (Gemma/OpenAI)
+  prompts/               # Prompt loading utilities
+    - loading_prompts.py       # Dataset and custom prompt loaders
+  storage/               # Database models and repository
+    - models.py               # SQLAlchemy models
+    - repository.py            # Database operations
+    - setup_db.py             # Database initialization
+  dashboard/             # Human-in-the-loop dashboard
+    - app.py                  # FastAPI application
+    - templates/              # HTML templates
+  moderator/             # Legacy code (backward compatibility only)
+toxic_gemma_classifier.py    # Gemma classifier implementation
+schema.py                     # Pydantic data models
+migrations/                   # Alembic database migrations
 ```
 
 ---
@@ -82,53 +92,85 @@ alembic -x database_url=postgresql+psycopg://myuser:mypassword@localhost:5433/my
 
 ### Running the AI Safety Pipeline
 
-The CLI runs the complete pipeline: input classification → answer generation → output classification.
+#### Option 1: Interactive Mode (Recommended for Testing)
 
-**New Pipeline (Recommended):**
+Enter prompts manually in real-time, just like a production system:
+
+```bash
+python monitor/pipeline/interactive_mode.py \
+  --input-classifier openai \
+  --answer-generator openai \
+  --output-classifier openai \
+  --database-url sqlite:///./ai_monitor.db
+```
+
+Then type prompts one at a time. Each prompt is processed immediately and saved to the database.
+
+#### Option 2: Batch Mode with Custom Prompts
+
+Process your own prompts from command line or file:
+
+**Single prompt:**
+```bash
+python monitor/pipeline/pipeline_cli.py \
+  --prompt "What is artificial intelligence?" \
+  --input-classifier openai \
+  --answer-generator openai \
+  --output-classifier openai \
+  --database-url sqlite:///./ai_monitor.db
+```
+
+**Multiple prompts:**
+```bash
+python monitor/pipeline/pipeline_cli.py \
+  --prompt "First question" \
+  --prompt "Second question" \
+  --prompt "Third question" \
+  --input-classifier openai \
+  --answer-generator openai \
+  --output-classifier openai \
+  --database-url sqlite:///./ai_monitor.db
+```
+
+**From file (one prompt per line):**
+```bash
+python monitor/pipeline/pipeline_cli.py \
+  --prompts-file my_prompts.txt \
+  --input-classifier openai \
+  --answer-generator openai \
+  --output-classifier openai \
+  --database-url sqlite:///./ai_monitor.db
+```
+
+#### Option 3: Batch Mode with Dataset
+
+Process prompts from a Hugging Face dataset:
 
 ```bash
 python monitor/pipeline/pipeline_cli.py \
   --input-classifier gemma \
   --answer-generator openai \
   --output-classifier gemma \
-  --gemma-base-model google/gemma-2b-it \
-  --openai-answer-model gpt-4o-mini \
   --limit 100 \
   --dataset-id allenai/real-toxicity-prompts \
-  --split train \
   --database-url sqlite:///./ai_monitor.db \
-  --output Results/pipeline_results.json \
   --preview 10
 ```
 
-Key switches:
+#### Key Configuration Options
 
-| Flag | Description |
-| --- | --- |
-| `--input-classifier {gemma,openai}` | Input classification backend. Default is Gemma. |
-| `--answer-generator {openai,none}` | Answer generation backend. Use 'none' to skip. |
-| `--output-classifier {gemma,openai,none}` | Output classification backend. Use 'none' to skip. |
-| `--gemma-base-model` | Hugging Face checkpoint for Gemma classifiers (works with LoRA adapters via `--gemma-adapter-path`). |
-| `--openai-answer-model` | OpenAI model for answer generation (default: gpt-4o-mini). |
-| `--openai-moderation-model` | OpenAI moderation model for input/output classification (default: omni-moderation-latest). |
-| `--database-url` | SQLAlchemy URL for persisting runs/logs/results (SQLite or Postgres). |
-| `--output` | JSON file containing the structured pipeline results. |
-
-**Legacy Moderation (Input-only, backward compatibility):**
-
-```bash
-python monitor/moderator/moderation_output.py \
-  --provider gemma \
-  --gemma-base-model google/gemma-2b-it \
-  --limit 100 \
-  --dataset-id allenai/real-toxicity-prompts \
-  --split train \
-  --database-url sqlite:///./ai_monitor.db \
-  --output Results/moderation_results.json \
-  --preview 10
-```
-
-The pipeline runner prints a short preview, writes the JSON dump to disk, and records the complete run in the database (including logs). You can re-run the command with different models/providers to compare machine behavior.
+| Flag | Description | Default |
+| --- | --- | --- |
+| `--input-classifier {gemma,openai}` | Input classification backend | `gemma` |
+| `--answer-generator {openai,none}` | Answer generation backend | `openai` |
+| `--output-classifier {gemma,openai,none}` | Output classification backend | `gemma` |
+| `--prompt TEXT` | Custom prompt (can use multiple times) | None |
+| `--prompts-file PATH` | File with custom prompts (one per line) | None |
+| `--gemma-base-model` | Gemma model checkpoint | `google/gemma-2b-it` |
+| `--openai-answer-model` | OpenAI model for answers | `gpt-4o-mini` |
+| `--database-url` | Database connection string | None |
+| `--output` | JSON output file path | `pipeline_results.json` |
+| `--preview` | Number of results to preview | `5` |
 
 ---
 
@@ -166,32 +208,97 @@ Each review instantly updates the database, so multiple reviewers can collaborat
 
 ---
 
-### Suggested review flow
+### Complete Workflow Example
 
-1. Run the classifier periodically (or whenever new prompts arrive) using the CLI command above.
-2. Point the dashboard to the same DB file/server.
-3. Triage flagged prompts via the dashboard:
-   - Click “Only flagged” to focus on potential violations.
-   - Record SAFE/TOXIC decisions, adding notes for escalations.
-4. Export downstream analytics by querying the `moderation_results` table (machine labels, human overrides, timestamps, and notes are all stored there).
+**Step 1: Process Prompts (Interactive Mode)**
+```bash
+python monitor/pipeline/interactive_mode.py \
+  --input-classifier openai \
+  --answer-generator openai \
+  --output-classifier openai \
+  --database-url sqlite:///./ai_monitor.db
+```
+Enter prompts one by one. Each is processed and saved immediately.
+
+**Step 2: Review in Dashboard**
+```bash
+export AI_SAFETY_MONITOR_DB=sqlite:///./ai_monitor.db
+uvicorn monitor.dashboard.app:app --reload --port 8000
+```
+Open http://127.0.0.1:8000 to review all prompts, flag issues, and add human labels.
+
+**Step 3: Review Flagged Items**
+- Click "Only flagged" to focus on problematic results
+- Review each flagged prompt and generated answer
+- Mark as SAFE or TOXIC with notes
+- All reviews are saved instantly
 
 ---
 
-### Customization tips
+### Quick Examples
 
-- **Adapters:** point `--gemma-adapter-path` to any PEFT LoRA directory to swap in a fine-tuned classifier.
-- **Datasets:** adapt `monitor/prompts/loading_prompts.py` to sample from your own corpus or augment metadata.
-- **Databases:** update `AI_SAFETY_MONITOR_DB` and `--database-url` to reuse production-grade Postgres/CloudSQL instances.
-- **Providers:** implement the `ClassifierProvider`/`ModerationProvider` protocols to plug in alternative moderation APIs.
+**Interactive mode with Gemma:**
+```bash
+python monitor/pipeline/interactive_mode.py \
+  --input-classifier gemma \
+  --answer-generator openai \
+  --output-classifier gemma \
+  --database-url sqlite:///./ai_monitor.db
+```
+
+**Process custom prompts from file:**
+```bash
+python monitor/pipeline/pipeline_cli.py \
+  --prompts-file my_prompts.txt \
+  --input-classifier openai \
+  --answer-generator openai \
+  --output-classifier openai \
+  --database-url sqlite:///./ai_monitor.db
+```
+
+**OpenAI-only (fastest, no GPU needed):**
+```bash
+python monitor/pipeline/interactive_mode.py \
+  --input-classifier openai \
+  --answer-generator openai \
+  --output-classifier openai \
+  --database-url sqlite:///./ai_monitor.db
+```
+
+### Customization
+
+- **Gemma Adapters:** Use `--gemma-adapter-path` to load fine-tuned LoRA adapters
+- **Custom Prompts:** Use `--prompt` or `--prompts-file` for your own prompts
+- **Databases:** Use PostgreSQL for production: `--database-url postgresql+psycopg://...`
+- **Models:** Configure different OpenAI models with `--openai-answer-model` and `--openai-moderation-model`
 
 ---
 
 ### Troubleshooting
 
-- The Gemma checkpoints require Hugging Face access grants; ensure `huggingface-cli whoami` succeeds before running the CLI.
-- On Apple Silicon, `bitsandbytes` is optional. The classifier automatically falls back to half-precision tensors if quantization is unavailable.
-- If you switch databases, rerun `python -m monitor.storage.setup_db --database-url <URL>` to ensure the new instance has the latest schema (including human review columns).
-- Dashboard not showing data? Confirm the `AI_SAFETY_MONITOR_DB` value matches the `--database-url` used by the CLI run and that the server user has read/write permissions.
+**Common Issues:**
+
+- **"No module named 'pydantic'" or similar**: Activate virtual environment: `source aiSafetyEnv/bin/activate`
+- **"Column does not exist"**: Run migrations: `alembic -x database_url=... upgrade head`
+- **"OpenAI API key not found"**: Set `export OPENAI_API_KEY="your-key"`
+- **"Hugging Face authentication required"**: Run `huggingface-cli login`
+- **Dashboard shows no data**: Ensure `AI_SAFETY_MONITOR_DB` matches the `--database-url` used in pipeline
+- **Gemma model loading fails**: Check Hugging Face authentication and available memory
+- **Port already in use**: Use different port: `uvicorn ... --port 8001`
+
+**Database Issues:**
+
+- **SQLite**: Works out of the box, no setup needed
+- **PostgreSQL**: Ensure database exists and migrations are run: `alembic -x database_url=... upgrade head`
+- **Schema errors**: Run `python -m monitor.storage.setup_db --database-url <URL>` for new databases
+
+---
+
+## Additional Documentation
+
+- **MIGRATIONS.md** - Database migration guide with Alembic
+- **INTERACTIVE_MODE_GUIDE.md** - Detailed guide for interactive mode
+- **CUSTOM_PROMPTS_GUIDE.md** - Guide for using custom prompts
 
 ---
 

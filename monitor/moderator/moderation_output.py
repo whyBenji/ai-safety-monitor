@@ -1,3 +1,8 @@
+"""
+Legacy moderation CLI - kept for backward compatibility.
+For new projects, use monitor/pipeline/pipeline_cli.py instead.
+"""
+
 from __future__ import annotations
 
 import argparse
@@ -14,7 +19,11 @@ if str(PROJECT_ROOT) not in sys.path:
 from monitor.moderator import ModerationService
 from monitor.prompts import load_prompts
 from monitor.providers.input_classifier import GemmaInputClassifier
-from monitor.providers.openai_client import ModerationProvider, OpenAIModerationProvider
+from monitor.providers.openai_client import OpenAIModerationProvider
+from monitor.storage import DatabaseLogHandler, ModerationRepository
+from schema import ModerationResult
+from toxic_gemma_classifier import ClassifierConfig, ToxicLoRAClassifier
+
 
 # Backward compatibility wrapper
 class OnPermClassifier:
@@ -25,13 +34,12 @@ class OnPermClassifier:
     def moderate_text(self, text: str):
         """Legacy interface - calls classify_input internally."""
         return self._classifier.classify_input(text)
-from monitor.storage import DatabaseLogHandler, ModerationRepository
-from schema import ModerationResult
-from toxic_gemma_classifier import ClassifierConfig, ToxicLoRAClassifier
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Run prompts through moderation providers and persist the results.")
+    parser = argparse.ArgumentParser(
+        description="Legacy moderation CLI (input-only). Use monitor/pipeline/pipeline_cli.py for full pipeline."
+    )
     parser.add_argument("--limit", type=int, default=50, help="Number of prompts to evaluate.")
     parser.add_argument(
         "--provider",
