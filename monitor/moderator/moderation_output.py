@@ -13,15 +13,57 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from monitor.moderator import ModerationService
 from monitor.prompts import load_prompts
-from monitor.providers.openai_client import OpenAIModerationProvider
+from monitor.providers.input_classifier import GemmaInputClassifier
+from monitor.providers.openai_client import ModerationProvider, OpenAIModerationProvider
+
+# Backward compatibility wrapper
+class OnPermClassifier:
+    """Backward compatibility wrapper for GemmaInputClassifier."""
+    def __init__(self, *, classifier=None, config=None):
+        self._classifier = GemmaInputClassifier(classifier=classifier, config=config)
+    
+    def moderate_text(self, text: str):
+        """Legacy interface - calls classify_input internally."""
+        return self._classifier.classify_input(text)
 from monitor.storage import DatabaseLogHandler, ModerationRepository
 from schema import ModerationResult
+from toxic_gemma_classifier import ClassifierConfig, ToxicLoRAClassifier
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Run prompts through OpenAI moderation and persist the results.")
+    parser = argparse.ArgumentParser(description="Run prompts through moderation providers and persist the results.")
     parser.add_argument("--limit", type=int, default=50, help="Number of prompts to evaluate.")
-    parser.add_argument("--model", type=str, default="omni-moderation-latest", help="OpenAI moderation model to use.")
+    parser.add_argument(
+        "--provider",
+        type=str,
+        choices=("gemma", "openai"),
+        default="gemma",
+        help="Which moderation backend to use. Defaults to the local Gemma classifier.",
+    )
+    parser.add_argument(
+        "--model",
+        type=str,
+        default="omni-moderation-latest",
+        help="OpenAI moderation model name. Only used when --provider=openai.",
+    )
+    parser.add_argument(
+        "--gemma-base-model",
+        type=str,
+        default="google/gemma-2b-it",
+        help="Base Gemma checkpoint to use for the local classifier.",
+    )
+    parser.add_argument(
+        "--gemma-adapter-path",
+        type=str,
+        default=None,
+        help="Optional path to a PEFT adapter checkpoint fine-tuned on safety data.",
+    )
+    parser.add_argument(
+        "--gemma-max-length",
+        type=int,
+        default=256,
+        help="Maximum prompt length (tokens) when tokenizing for Gemma.",
+    )
     parser.add_argument("--preview", type=int, default=5, help="How many results to preview in stdout.")
     parser.add_argument("--dataset-id", type=str, default="allenai/real-toxicity-prompts", help="Dataset identifier to load.")
     parser.add_argument("--split", type=str, default="train", help="Dataset split to load.")
@@ -67,6 +109,23 @@ def _serialize_args(args: argparse.Namespace) -> dict:
     return serialized
 
 
+def build_provider(args: argparse.Namespace):
+    if args.provider == "openai":
+        model_name = args.model
+        provider = OpenAIModerationProvider(model=model_name)
+        return provider, model_name
+
+    adapter_path = args.gemma_adapter_path or None
+    config = ClassifierConfig(
+        base_model=args.gemma_base_model,
+        adapter_path=adapter_path,
+        max_length=args.gemma_max_length,
+    )
+    classifier = ToxicLoRAClassifier(config)
+    provider = OnPermClassifier(classifier=classifier)
+    return provider, config.base_model
+
+
 def main() -> None:
     args = parse_args()
     configure_logging(args.verbose)
@@ -74,7 +133,7 @@ def main() -> None:
     logging.info("Loading %s prompts from dataset.", args.limit)
     prompts = load_prompts(n=args.limit, dataset_id=args.dataset_id, split=args.split)
 
-    provider = OpenAIModerationProvider(model=args.model)
+    provider, provider_model_name = build_provider(args)
     service = ModerationService(provider)
 
     repository: ModerationRepository | None = None
@@ -85,7 +144,7 @@ def main() -> None:
         run_record = repository.start_run(
             dataset_id=args.dataset_id,
             dataset_split=args.split,
-            model=args.model,
+            model=provider_model_name,
             prompt_limit=args.limit,
             output_path=str(args.output),
             extra_args=_serialize_args(args),
@@ -93,7 +152,7 @@ def main() -> None:
         db_handler = DatabaseLogHandler(repository, run_record.id)
         logging.getLogger().addHandler(db_handler)
 
-    logging.info("Starting moderation run.")
+    logging.info("Starting moderation run with %s backend.", args.provider)
     results = service.moderate_prompts(prompts)
     logging.info("Moderation complete. Writing results to %s", args.output)
 

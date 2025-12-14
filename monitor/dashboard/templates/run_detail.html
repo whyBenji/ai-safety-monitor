@@ -1,0 +1,160 @@
+{% extends "base.html" %}
+
+{% block content %}
+<a href="/" class="btn-ghost">← Back to all runs</a>
+<h1>Run #{{ run.id }}</h1>
+
+<div class="metrics">
+  <div class="card">
+    <h3>Dataset</h3>
+    <p style="font-size:1.2rem;margin:0.25rem 0;">{{ run.dataset_id }} · {{ run.dataset_split }}</p>
+    <small>Prompt limit: {{ run.prompt_limit }}</small>
+  </div>
+  <div class="card">
+    <h3>Model</h3>
+    <p style="font-size:1.2rem;margin:0.25rem 0;">{{ run.model }}</p>
+    <small>Status: {{ run.status }}</small>
+  </div>
+  <div class="card">
+    <h3>Input Flagged</h3>
+    <p style="font-size:2rem;margin:0.25rem 0;color:var(--danger);">{{ stats.input_flagged_total }}</p>
+    <small>Input classification flags.</small>
+  </div>
+  <div class="card">
+    <h3>Output Flagged</h3>
+    <p style="font-size:2rem;margin:0.25rem 0;color:var(--danger);">{{ stats.output_flagged_total }}</p>
+    <small>Output classification flags.</small>
+  </div>
+  <div class="card">
+    <h3>Answers Generated</h3>
+    <p style="font-size:2rem;margin:0.25rem 0;">{{ stats.answers_generated }}</p>
+    <small>Total answers generated.</small>
+  </div>
+  <div class="card">
+    <h3>Human Reviews</h3>
+    <p style="font-size:2rem;margin:0.25rem 0;color:var(--success);">{{ stats.reviewed_total }}</p>
+    <small>Pending: {{ stats.pending_reviews }}</small>
+  </div>
+</div>
+
+<div style="display:flex;align-items:center;justify-content:space-between;margin:1rem 0;">
+  <h2>Results</h2>
+  {% if only_flagged %}
+  <a class="btn-ghost" href="/runs/{{ run.id }}">Show all</a>
+  {% else %}
+  <a class="btn-ghost" href="/runs/{{ run.id }}?only_flagged=1">Only flagged</a>
+  {% endif %}
+</div>
+
+{% for result in results %}
+<div class="result-card">
+  <div style="margin-bottom: 1rem;">
+    <h3 style="margin: 0 0 0.5rem 0; font-size: 1rem; color: #94a3b8;">PROMPT</h3>
+    <div class="prompt-text">{{ result.prompt_text }}</div>
+  </div>
+
+  <div style="margin-bottom: 1rem;">
+    <h3 style="margin: 0 0 0.5rem 0; font-size: 1rem; color: #94a3b8;">INPUT CLASSIFICATION</h3>
+    <div class="tag-list">
+      <span class="tag" style="background: {% if result.input_flagged %}rgba(185,28,28,0.3){% else %}rgba(21,128,61,0.3){% endif %};">
+        Input: {{ "TOXIC" if result.input_flagged else "SAFE" }}
+      </span>
+      {% for flag in result.input_flags %}
+      <span class="tag">
+        {{ flag.category }} ({{ "%.2f"|format(flag.score) }}){% if flag.violated %} ⚠{% endif %}
+      </span>
+      {% endfor %}
+    </div>
+  </div>
+
+  {% if result.answer_text %}
+  <div style="margin-bottom: 1rem;">
+    <h3 style="margin: 0 0 0.5rem 0; font-size: 1rem; color: #94a3b8;">GENERATED ANSWER</h3>
+    <div class="prompt-text" style="background: rgba(37, 99, 235, 0.1); padding: 0.75rem; border-radius: 0.5rem;">
+      {{ result.answer_text }}
+    </div>
+    {% if result.answer_model %}
+    <small style="color: #94a3b8;">Model: {{ result.answer_model }}</small>
+    {% endif %}
+  </div>
+
+  {% if result.output_flagged is not none %}
+  <div style="margin-bottom: 1rem;">
+    <h3 style="margin: 0 0 0.5rem 0; font-size: 1rem; color: #94a3b8;">OUTPUT CLASSIFICATION</h3>
+    <div class="tag-list">
+      <span class="tag" style="background: {% if result.output_flagged %}rgba(185,28,28,0.3){% else %}rgba(21,128,61,0.3){% endif %};">
+        Output: {{ "TOXIC" if result.output_flagged else "SAFE" }}
+      </span>
+      {% for flag in result.output_flags %}
+      <span class="tag">
+        {{ flag.category }} ({{ "%.2f"|format(flag.score) }}){% if flag.violated %} ⚠{% endif %}
+      </span>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+  {% endif %}
+
+  <div style="margin-bottom: 1rem;">
+    <h3 style="margin: 0 0 0.5rem 0; font-size: 1rem; color: #94a3b8;">HUMAN REVIEW</h3>
+    <div class="tag-list">
+      <span class="tag">
+        Human: {{ result.human_label or "Pending" }}
+      </span>
+      {% if result.human_label_type %}
+      <span class="tag">
+        Type: {{ result.human_label_type }}
+      </span>
+      {% endif %}
+    </div>
+    {% if result.human_notes %}
+    <p style="margin-top: 0.5rem;"><strong>Notes:</strong> {{ result.human_notes }}</p>
+    {% endif %}
+  </div>
+
+  <details style="margin-bottom: 1rem;">
+    <summary>Raw Responses</summary>
+    <div style="margin-top: 0.5rem;">
+      <strong>Input Classification:</strong>
+      <pre>{{ result.input_raw_response | tojson(indent=2) }}</pre>
+    </div>
+    {% if result.answer_raw_response %}
+    <div style="margin-top: 0.5rem;">
+      <strong>Answer Generation:</strong>
+      <pre>{{ result.answer_raw_response | tojson(indent=2) }}</pre>
+    </div>
+    {% endif %}
+    {% if result.output_raw_response %}
+    <div style="margin-top: 0.5rem;">
+      <strong>Output Classification:</strong>
+      <pre>{{ result.output_raw_response | tojson(indent=2) }}</pre>
+    </div>
+    {% endif %}
+  </details>
+
+  <form class="review-form" method="post" action="/runs/{{ run.id }}/results/{{ result.id }}/review">
+    <input type="text" name="notes" placeholder="Optional note" value="{{ result.human_notes or '' }}" />
+    <div>
+      <button class="btn-safe" name="label" value="SAFE" type="submit">Mark Safe</button>
+      <button class="btn-toxic" name="label" value="TOXIC" type="submit">Mark Toxic</button>
+    </div>
+  </form>
+</div>
+{% else %}
+<p>No pipeline results recorded for this run.</p>
+{% endfor %}
+
+{% if run.logs %}
+<h2>Logs</h2>
+<div class="card">
+  {% for log in run.logs %}
+  <div style="margin-bottom:0.5rem;">
+    <small style="color:#94a3b8;">{{ log.created_at }} · {{ log.level }}</small>
+    <div>{{ log.message }}</div>
+  </div>
+  {% else %}
+  <p>No logs recorded.</p>
+  {% endfor %}
+  </div>
+{% endif %}
+{% endblock %}
